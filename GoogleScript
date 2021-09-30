@@ -1,0 +1,310 @@
+// What if the counter is manually adjusted and there are no cols to be added
+// Status of each process should be updated in excel
+// try catching error and update the status
+
+//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+// Reading excel, just reads the data from excel and call ecfetching function
+
+function readingexcel() {
+ var sheet = SpreadsheetApp.getActiveSheet();
+ var startRow = 2;
+ var numRows = sheet.getLastRow() - 1;
+ var dataRange = sheet.getRange(startRow, 1, numRows, 7)
+ var data = dataRange.getValues();
+ 
+ for (i in data) {
+   var row = data[i];
+   rownum = startRow + Number(i)
+   response_data = handler(row[0], row[1], row[3], row[4], row[5], rownum);
+ }
+}
+
+
+
+//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+function handler(cubeid, tablename, oldcount,dashid, widgetid, rownum){
+
+var ec_list = ecfetching(cubeid, tablename)
+var ec_json = isEmpty(JSON.parse(ec_list))
+
+// EC list will have null values if the ec name if wrong or the table is wrong
+// the above function will return TRUE if it is empty
+
+var message = ""
+var ec_list_len = 0
+
+if (ec_json == true)
+    {message = "Check EC/tablename";}
+else {
+    ec_json = JSON.parse(ec_list)
+    ec_list_len = ec_json[tablename]["columns"].length
+    if (ec_list_len <= oldcount)
+    {message = "No New Cols";}
+    else if (ec_list_len > oldcount)
+    {message = "New Cols Found";}
+}
+
+var writesheet = SpreadsheetApp.getActiveSheet();
+writesheet.getRange(rownum, 7).setValue(message);
+writesheet.getRange(rownum, 3).setValue(oldcount);
+writesheet.getRange(rownum, 4).setValue(ec_list_len);
+
+// The outcome of this if statemetn is to find the total no of columns available in EC as on date
+// it compare the previous run number and only if the new run columns are high it proceeds
+if (ec_list_len > oldcount)
+    {
+      // to get the existing dashboard columns
+    var dash_cols = getdashdetails(dashid, widgetid)
+    if (dash_cols == null)
+          {
+            writesheet.getRange(rownum, 8).setValue("check dashId/widgetID");
+            //If dash col is null, then somethign wrong in fetch and no need to execute further, hence return statemetn
+            return null
+          }
+    else 
+          {
+            writesheet.getRange(rownum, 8).setValue("DashID Found");
+          }
+    // to compare the existing dashboard fields with ec fields
+    var cols_to_add = compare(ec_json, tablename, dash_cols)
+    var cols_to_add_len = cols_to_add.length
+    if (cols_to_add_len == 0)
+    {
+      writesheet.getRange(rownum, 9).setValue("No New cols found");
+      return null
+    }
+    // to add the new cols in the dashboard
+    writesheet.getRange(rownum, 9).setValue("New cols found")
+    final = columnaddition(cols_to_add)
+    writesheet.getRange(rownum, 10).setValue("Completed");
+    Logger.log(cols_to_add)
+    }
+
+}
+
+
+//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+// This function, will call the EC based on excel sheet
+
+function ecfetching(cubeid, tablename){
+
+var authHeader = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiNWZhMDBiNTQzYmJmOTcwMDJjYWMxNjI0IiwiYXBpU2VjcmV0IjoiYTIzMGU2YjQtNzk4Zi02NGUxLWUzMzMtNGQ2MTY4Y2FlZGZhIiwiaWF0IjoxNjMxOTMxMzQ5fQ.xRcNV6jcf8jLeGKvDTb8OookMNrIkny3F4qy4d7G7g4"
+ 
+ec = cubeid
+
+var options = {
+headers: {Authorization: authHeader},
+accept: 'application/json',
+contentType: 'application/json',
+muteHttpExceptions: true
+}
+
+var from_url = 'https://bi.cropin.com/api/v2/datamodels/'+ec+'/schema/datasets';
+from_response = UrlFetchApp.fetch(from_url, options);
+var fromdata = from_response.getContentText();
+ecdata = JSON.parse(fromdata)
+
+//EC retult will be in the form of list
+// first for, will iterate through each item
+table_list = {}
+
+var len = ecdata.length;
+for (var counter = 0; counter < len; counter = counter + 1) 
+  {
+    tables = ecdata[counter]["schema"]["tables"][0]["name"];
+    // There may be multiple tables, if statemtn is to check whether to see all table or one specific table
+    // We will always focus on task_vw table
+    if (tables == tablename)
+      {
+        col_details = ecdata[counter]["schema"]["tables"][0]["columns"];
+        all_columns = [];
+        table_list[tables] = {};
+        var col_len = col_details.length;
+        for (var counter = 0; counter < col_len; counter = counter + 1) 
+          {
+            col_name = col_details[counter]["name"];
+            col_type = col_details[counter]["type"];
+            structure = {"name":col_name, "type":col_type};
+            all_columns.push(structure);
+          }
+        table_list[tables]["columns"] = all_columns;
+        }
+      }
+
+return JSON.stringify(table_list)
+
+}
+
+
+//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+//The function is called only of the old columns are less than new columns
+//The outcome of this function is to fetch the dashboard columns details
+//This function in terns call another function
+
+function getdashdetails(dashid, widgetid){
+
+var  authHeader = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiNWZhMDBiNTQzYmJmOTcwMDJjYWMxNjI0IiwiYXBpU2VjcmV0IjoiYTIzMGU2YjQtNzk4Zi02NGUxLWUzMzMtNGQ2MTY4Y2FlZGZhIiwiaWF0IjoxNjMxOTMxMzQ5fQ.xRcNV6jcf8jLeGKvDTb8OookMNrIkny3F4qy4d7G7g4"
+ 
+var options = {
+headers: {Authorization: authHeader},
+accept: 'application/json',
+contentType: 'application/json',
+muteHttpExceptions: true
+}
+
+from_dashboard = dashid
+from_widget = widgetid
+ 
+
+var from_url = 'https://bi.cropin.com/api/v1/dashboards/'+from_dashboard+'/widgets/'+from_widget;
+try {from_response = UrlFetchApp.fetch(from_url, options);
+      var fromdata = from_response.getContentText();
+      fromdashboard = JSON.parse(fromdata);
+
+      dash_cols=[]
+
+      dash_col_len = fromdashboard["metadata"]["panels"][0]["items"].length;
+      for (var counter = 0; counter < dash_col_len; counter = counter + 1) 
+      {
+      dash_cols.push(fromdashboard["metadata"]["panels"][0]["items"][counter]["jaql"]["column"])
+      }
+      return dash_cols}
+
+catch (e) {return null}
+
+}
+
+//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+function compare(ec_list, tablename, dash_col) {
+  
+ec_col_len = ec_list[tablename]["columns"].length;
+ec_columns =[]
+for (var counter = 0; counter < ec_col_len; counter = counter + 1) 
+  {
+  ec_columns.push(ec_list[tablename]["columns"][counter]["name"])
+  }
+
+//dash_cols comes from existng dashboard API
+dash_cols = dash_col
+
+//cols to avoid comes from google sheet
+cols_to_avoid =["Actual Avg Visits","Efficiency"]
+
+// Adding cols to avoid in a final list, so that we have only one list to compare with EC cols
+col_avoid_len = cols_to_avoid.length;
+for (var counter = 0; counter < col_avoid_len; counter = counter + 1) 
+  {
+  dash_cols.push(cols_to_avoid[counter])
+  }
+
+//ec_list contains the list of fields in Ec, dash_cols contains all the dashboard cols
+//compare ec_list and dash_cols to work on cols to be added
+
+cols_to_add = []
+for (var counter = 0; counter < ec_col_len; counter = counter + 1) 
+  {
+      if (dash_cols.indexOf(ec_columns[counter]) == -1)  
+      {
+        cols_to_add.push(ec_columns[counter])
+      }
+  }
+
+return cols_to_add
+}
+
+
+
+//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+function columnaddition(cols_to_add){
+ 
+var authHeader = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiNWZhMDBiNTQzYmJmOTcwMDJjYWMxNjI0IiwiYXBpU2VjcmV0IjoiYTIzMGU2YjQtNzk4Zi02NGUxLWUzMzMtNGQ2MTY4Y2FlZGZhIiwiaWF0IjoxNjMxOTMxMzQ5fQ.xRcNV6jcf8jLeGKvDTb8OookMNrIkny3F4qy4d7G7g4"
+ 
+var options = {
+headers: {Authorization: authHeader},
+accept: 'application/json',
+contentType: 'application/json'
+}
+var dashboard = "612ddd266cd42d002e656abd"
+var widget = "612dde676cd42d002e656ac1"
+var sisenseurl = 'https://bi.cropin.com/api/v1/dashboards/'+dashboard+'/widgets/'+widget;
+cube_response = UrlFetchApp.fetch(sisenseurl, options)
+var fact = cube_response.getContentText();
+ 
+todashboard = JSON.parse(fact)
+structure = {
+      "title": todashboard["title"],
+      "oid": todashboard["oid"],
+      "desc": "null",
+      "datasource": {
+          "title": todashboard["datasource"]["title"],
+          "id": todashboard["datasource"]["id"],
+          "address": todashboard["datasource"]["address"],
+          "database": todashboard["datasource"]["database"],
+          "fullname": todashboard["datasource"]["fullname"]
+      },
+      "type": todashboard["type"],
+      "subtype": todashboard["subtype"],
+      "dashboardid": todashboard["dashboardid"],
+      "owner": todashboard["owner"],
+      "userId": todashboard["userId"],
+      "instanceType": todashboard["instanceType"],
+      "lastUpdated": "2021-07-23T10:08:45.691Z",
+      "metadata": "",
+      "shares": [{
+    "shareId": "5fa00b543bbf97002cac1624",
+    "type": "user"
+  }]
+};
+// Definition of columns to be added
+column_list = cols_to_add
+
+len = column_list.length
+new_column_list = []
+for (var counter = 0; counter < len; counter = counter + 1) {
+  newcol = column_list[counter]
+  dash_table = todashboard["metadata"]["panels"][0]["items"][1]["jaql"]["table"]
+  newcol_dim = "[" + dash_table + "." + newcol + "]"
+  newcol_title = newcol
+  new_columnformat = {
+      "jaql": {
+          "table": dash_table,
+          "column": newcol,
+          "dim": newcol_dim,
+          "title": newcol_title
+          }
+      }
+  new_column_list.push(new_columnformat)
+}
+// Fetching of existing columns and adding the new columns
+old_columns = todashboard["metadata"]["panels"][0]["items"]
+all_columns = []
+all_columns.push(old_columns)
+new_column_list.forEach(function(value) {
+ all_columns[0].push(value)
+});
+// Logger.log(JSON.stringify(all_columns[0]))
+panels = todashboard["metadata"]["panels"]
+structure["metadata"]= {panels}
+ 
+var post_options = {
+headers: {Authorization: authHeader},
+accept: 'application/json',
+contentType: 'application/json',
+payload: JSON.stringify(structure),
+method: 'Patch',
+muteHttpExceptions: true
+}
+var posturl = 'https://bi.cropin.com/api/v1/dashboards/'+dashboard+'/widgets/'+widget;
+post_response = UrlFetchApp.fetch(posturl, post_options)
+var fact = post_response.getContentText();
+final = JSON.parse(fact)
+return (final)
+}
+
+
+function isEmpty(obj) {
+  return Object.keys(obj).length === 0;
+}
+
