@@ -1,14 +1,14 @@
-
-
 //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 // Reading excel, just reads the data from excel and call ecfetching function
 
 function readingexcel() {
  var sheet = SpreadsheetApp.getActiveSheet();
- var startRow = 2;
+ var startRow = 5;
  var numRows = sheet.getLastRow() - 4;
  var dataRange = sheet.getRange(startRow, 1, numRows, 7)
  var data = dataRange.getValues();
+var cleanrange = sheet.getRange(startRow, 7, numRows, 10)
+cleanrange.clearContent();
  
  for (i in data) {
    var row = data[i];
@@ -17,14 +17,22 @@ function readingexcel() {
  }
 }
 
-
-
-//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 function handler(cubeid, tablename, oldcount,dashid, widgetid, rownum){
 
-var ec_list = ecfetching(cubeid, tablename)
+var authHeader = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiNWZhMDBiNTQzYmJmOTcwMDJjYWMxNjI0IiwiYXBpU2VjcmV0IjoiYTIzMGU2YjQtNzk4Zi02NGUxLWUzMzMtNGQ2MTY4Y2FlZGZhIiwiaWF0IjoxNjMxOTMxMzQ5fQ.xRcNV6jcf8jLeGKvDTb8OookMNrIkny3F4qy4d7G7g4"
+
+var options = {
+headers: {Authorization: authHeader},
+accept: 'application/json',
+contentType: 'application/json',
+muteHttpExceptions: true
+}
+
+url = "bi.cropin.com"
+
+var ec_list = ecfetching(cubeid, tablename, options, url)
 var ec_json = isEmpty(JSON.parse(ec_list))
 
 // EC list will have null values if the ec name if wrong or the table is wrong
@@ -54,7 +62,7 @@ writesheet.getRange(rownum, 4).setValue(ec_list_len);
 if (ec_list_len > oldcount)
     {
       // to get the existing dashboard columns
-    var dash_cols = getdashdetails(dashid, widgetid)
+    var dash_cols = getdashdetails(dashid, widgetid, options, url)
     if (dash_cols == null)
           {
             writesheet.getRange(rownum, 8).setValue("check dashId/widgetID");
@@ -75,31 +83,18 @@ if (ec_list_len > oldcount)
     }
     // to add the new cols in the dashboard
     writesheet.getRange(rownum, 9).setValue("New cols found")
-    final = columnaddition(cols_to_add)
+    final = columnaddition(cols_to_add, options,url, dashid, widgetid, authHeader)
     writesheet.getRange(rownum, 10).setValue("Completed");
     Logger.log(cols_to_add)
     }
-
 }
-
 
 //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 // This function, will call the EC based on excel sheet
 
-function ecfetching(cubeid, tablename){
+function ecfetching(cubeid, tablename, options, url){
 
-var authHeader = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiNWZhMDBiNTQzYmJmOTcwMDJjYWMxNjI0IiwiYXBpU2VjcmV0IjoiYTIzMGU2YjQtNzk4Zi02NGUxLWUzMzMtNGQ2MTY4Y2FlZGZhIiwiaWF0IjoxNjMxOTMxMzQ5fQ.xRcNV6jcf8jLeGKvDTb8OookMNrIkny3F4qy4d7G7g4"
- 
-ec = cubeid
-
-var options = {
-headers: {Authorization: authHeader},
-accept: 'application/json',
-contentType: 'application/json',
-muteHttpExceptions: true
-}
-
-var from_url = 'https://bi.cropin.com/api/v2/datamodels/'+ec+'/schema/datasets';
+var from_url = 'https://'+url+'/api/v2/datamodels/'+cubeid+'/schema/datasets';
 from_response = UrlFetchApp.fetch(from_url, options);
 var fromdata = from_response.getContentText();
 ecdata = JSON.parse(fromdata)
@@ -130,33 +125,20 @@ for (var counter = 0; counter < len; counter = counter + 1)
         table_list[tables]["columns"] = all_columns;
         }
       }
-
 return JSON.stringify(table_list)
-
 }
-
 
 //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 //The function is called only of the old columns are less than new columns
 //The outcome of this function is to fetch the dashboard columns details
 //This function in terns call another function
 
-function getdashdetails(dashid, widgetid){
-
-var  authHeader = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiNWZhMDBiNTQzYmJmOTcwMDJjYWMxNjI0IiwiYXBpU2VjcmV0IjoiYTIzMGU2YjQtNzk4Zi02NGUxLWUzMzMtNGQ2MTY4Y2FlZGZhIiwiaWF0IjoxNjMxOTMxMzQ5fQ.xRcNV6jcf8jLeGKvDTb8OookMNrIkny3F4qy4d7G7g4"
- 
-var options = {
-headers: {Authorization: authHeader},
-accept: 'application/json',
-contentType: 'application/json',
-muteHttpExceptions: true
-}
+function getdashdetails(dashid, widgetid, options, url){
 
 from_dashboard = dashid
 from_widget = widgetid
- 
 
-var from_url = 'https://bi.cropin.com/api/v1/dashboards/'+from_dashboard+'/widgets/'+from_widget;
+var from_url = 'https://'+url+'/api/v1/dashboards/'+from_dashboard+'/widgets/'+from_widget;
 try {from_response = UrlFetchApp.fetch(from_url, options);
       var fromdata = from_response.getContentText();
       fromdashboard = JSON.parse(fromdata);
@@ -188,7 +170,22 @@ for (var counter = 0; counter < ec_col_len; counter = counter + 1)
 dash_cols = dash_col
 
 //cols to avoid comes from google sheet
-cols_to_avoid =["Actual Avg Visits","Efficiency"]
+
+const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+const sheetname = spreadsheet.getSheetByName("Sheet2");
+
+var strrow = 2;
+var numofrow = sheetname.getLastRow() - 1;
+var datRange = sheetname.getRange(strrow, 1, numofrow, 2)
+var dat = datRange.getValues();
+ 
+ cols_to_avoid = []
+
+ for (i in dat) {
+   var row = dat[i];
+   rownum = strrow + Number(i)
+   cols_to_avoid.push(row[0])
+}
 
 // Adding cols to avoid in a final list, so that we have only one list to compare with EC cols
 col_avoid_len = cols_to_avoid.length;
@@ -212,21 +209,10 @@ for (var counter = 0; counter < ec_col_len; counter = counter + 1)
 return cols_to_add
 }
 
-
-
 //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-function columnaddition(cols_to_add){
+function columnaddition(cols_to_add, options, url,dashid, widgetid, authHeader){
  
-var authHeader = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiNWZhMDBiNTQzYmJmOTcwMDJjYWMxNjI0IiwiYXBpU2VjcmV0IjoiYTIzMGU2YjQtNzk4Zi02NGUxLWUzMzMtNGQ2MTY4Y2FlZGZhIiwiaWF0IjoxNjMxOTMxMzQ5fQ.xRcNV6jcf8jLeGKvDTb8OookMNrIkny3F4qy4d7G7g4"
- 
-var options = {
-headers: {Authorization: authHeader},
-accept: 'application/json',
-contentType: 'application/json'
-}
-var dashboard = "612ddd266cd42d002e656abd"
-var widget = "612dde676cd42d002e656ac1"
-var sisenseurl = 'https://bi.cropin.com/api/v1/dashboards/'+dashboard+'/widgets/'+widget;
+var sisenseurl = 'https://'+url+'/api/v1/dashboards/'+dashid+'/widgets/'+widgetid;
 cube_response = UrlFetchApp.fetch(sisenseurl, options)
 var fact = cube_response.getContentText();
  
@@ -282,7 +268,7 @@ all_columns.push(old_columns)
 new_column_list.forEach(function(value) {
  all_columns[0].push(value)
 });
-// Logger.log(JSON.stringify(all_columns[0]))
+
 panels = todashboard["metadata"]["panels"]
 structure["metadata"]= {panels}
  
@@ -294,14 +280,14 @@ payload: JSON.stringify(structure),
 method: 'Patch',
 muteHttpExceptions: true
 }
-var posturl = 'https://bi.cropin.com/api/v1/dashboards/'+dashboard+'/widgets/'+widget;
+var posturl = 'https://'+url+'/api/v1/dashboards/'+dashid+'/widgets/'+widgetid;
 post_response = UrlFetchApp.fetch(posturl, post_options)
 var fact = post_response.getContentText();
 final = JSON.parse(fact)
 return (final)
 }
 
-
+//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 function isEmpty(obj) {
   return Object.keys(obj).length === 0;
 }
