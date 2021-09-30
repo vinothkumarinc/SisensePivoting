@@ -1,6 +1,4 @@
-// What if the counter is manually adjusted and there are no cols to be added
-// Status of each process should be updated in excel
-// try catching error and update the status
+
 
 //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 // Reading excel, just reads the data from excel and call ecfetching function
@@ -8,7 +6,7 @@
 function readingexcel() {
  var sheet = SpreadsheetApp.getActiveSheet();
  var startRow = 2;
- var numRows = sheet.getLastRow() - 1;
+ var numRows = sheet.getLastRow() - 4;
  var dataRange = sheet.getRange(startRow, 1, numRows, 7)
  var data = dataRange.getValues();
  
@@ -307,4 +305,3 @@ return (final)
 function isEmpty(obj) {
   return Object.keys(obj).length === 0;
 }
-
