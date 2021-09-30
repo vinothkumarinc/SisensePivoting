@@ -234,12 +234,7 @@ structure = {
       "owner": todashboard["owner"],
       "userId": todashboard["userId"],
       "instanceType": todashboard["instanceType"],
-      "lastUpdated": "2021-07-23T10:08:45.691Z",
-      "metadata": "",
-      "shares": [{
-    "shareId": "5fa00b543bbf97002cac1624",
-    "type": "user"
-  }]
+      "metadata": ""
 };
 // Definition of columns to be added
 column_list = cols_to_add
