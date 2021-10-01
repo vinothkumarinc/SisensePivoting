@@ -85,7 +85,12 @@ if (ec_list_len > oldcount)
     writesheet.getRange(rownum, 9).setValue("New cols found")
     final = columnaddition(cols_to_add, options,url, dashid, widgetid, authHeader)
     writesheet.getRange(rownum, 10).setValue("Completed");
-    Logger.log(cols_to_add)
+    
+    // for publishing the dashboard
+
+    dash_publish = publish(authHeader, dashid, url)
+    writesheet.getRange(rownum, 11).setValue("Completed");
+
     }
 }
 
@@ -280,6 +285,28 @@ post_response = UrlFetchApp.fetch(posturl, post_options)
 var fact = post_response.getContentText();
 final = JSON.parse(fact)
 return (final)
+}
+
+//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+function publish(authHeader, dashid, url){
+
+
+var post_options = {
+    headers: {
+        'accept': 'application/json',
+        'authorization': authHeader,
+        'X-XSRF-TOKEN': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI1ZmEwMGI1NDNiYmY5NzAwMmNhYzE2MjQiLCJ0ZW5hbnRJZCI6IjYxM2VlMDlkMTk4Y2UzMDAxYTdlMGMzNCIsImFsbG93ZWRUZW5hbnRzIjpbIjYxM2VlMDlkMTk4Y2UzMDAxYTdlMGMzNCJdLCJjc3JmVG9rZW4iOiJFUWQ0ZXBCQ2NEVEJPbGRuNEh5U3FNd054ZHp0UERWSTRLWXZVaXlIWmhjSkNWd3hmcGs0enpSc0NMbkRZSXVpIiwiZXhwIjoxNjMzMTAzOTA5LCJpYXQiOjE2MzMwMTc1MDl9.MxUBMZv8pdEIF5ulxE3DI6J4mQ86ypCbGuFenS7K9Gw'
+    },
+method: 'POST',
+muteHttpExceptions: true
+}
+
+
+var publish_url = 'https://'+url+'/api/v1/dashboards/'+dashid+'/publish?force=true';
+publish_response = UrlFetchApp.fetch(publish_url, post_options);
+var publishdata = publish_response.getContentText();
+
 }
 
 //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
